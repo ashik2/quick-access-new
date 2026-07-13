@@ -1,0 +1,6 @@
+{
+  "name": "Quick access",
+  "description": "A beautiful, floating overlay taskbar and launcher that is always visible on your device, supporting customizable pinned apps, system utility shortcuts, and quick searches.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

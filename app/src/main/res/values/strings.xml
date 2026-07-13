@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Quick access</string>
+    <string name="accessibility_description">Enables the Back button functionality in the Quick access overlay.</string>
+</resources>
