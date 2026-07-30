@@ -53,9 +53,6 @@ class TaskbarViewModel(application: Application) : AndroidViewModel(application)
     private val _themePreset = MutableStateFlow(prefs.getString("pref_taskbar_theme", "glass") ?: "glass")
     val themePreset: StateFlow<String> = _themePreset.asStateFlow()
 
-    private val _autoColorButtons = MutableStateFlow(prefs.getBoolean("pref_auto_color_buttons", false))
-    val autoColorButtons: StateFlow<Boolean> = _autoColorButtons.asStateFlow()
-
     private val _isServiceEnabled = MutableStateFlow(prefs.getBoolean("pref_taskbar_enabled", false))
     val isServiceEnabled: StateFlow<Boolean> = _isServiceEnabled.asStateFlow()
 
@@ -105,6 +102,10 @@ class TaskbarViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }.sortedBy { it.appName.lowercase() }
                 _installedApps.value = apps
+                // Preload icons asynchronously in background to ensure zero scrolling lag
+                viewModelScope.launch(Dispatchers.IO) {
+                    IconCacheManager.preloadIcons(context, apps.map { it.packageName })
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -191,12 +192,6 @@ class TaskbarViewModel(application: Application) : AndroidViewModel(application)
     fun updateThemePreset(preset: String) {
         _themePreset.value = preset
         prefs.edit().putString("pref_taskbar_theme", preset).apply()
-        notifyServiceOfChange()
-    }
-
-    fun updateAutoColorButtons(enabled: Boolean) {
-        _autoColorButtons.value = enabled
-        prefs.edit().putBoolean("pref_auto_color_buttons", enabled).apply()
         notifyServiceOfChange()
     }
 

@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.example.data.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -101,7 +102,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
     private var orientation = mutableStateOf("vertical")
     private var opacity = mutableStateOf(0.85f)
     private var themePreset = mutableStateOf("glass")
-    private var autoColorButtons = mutableStateOf(false)
     private var isExpanded = mutableStateOf(false)
     private var isSearchOpen = mutableStateOf(false)
     private var isMinimized = mutableStateOf(false)
@@ -128,7 +128,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         orientation.value = prefs.getString("pref_taskbar_orientation", "vertical") ?: "vertical"
         opacity.value = prefs.getFloat("pref_taskbar_opacity", 0.85f)
         themePreset.value = prefs.getString("pref_taskbar_theme", "glass") ?: "glass"
-        autoColorButtons.value = prefs.getBoolean("pref_auto_color_buttons", false)
         offsetPercentY.value = prefs.getFloat("pref_taskbar_offset_y", 0.4f)
         overlapNavBar.value = prefs.getBoolean("pref_overlap_nav_bar", true)
     }
@@ -915,7 +914,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         onTap: () -> Unit
     ) {
         val context = LocalContext.current
-        val iconBitmap = remember(packName) { getAppIconBitmap(context, packName) }
+        val iconBitmap = rememberAppIcon(context, packName)
 
         Box(
             modifier = Modifier
@@ -925,7 +924,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         ) {
             if (iconBitmap != null) {
                 Image(
-                    bitmap = iconBitmap.asImageBitmap(),
+                    bitmap = iconBitmap,
                     contentDescription = packName,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1139,11 +1138,11 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val context = LocalContext.current
-                            val iconBitmap = remember(app.packageName) { getAppIconBitmap(context, app.packageName) }
+                            val iconBitmap = rememberAppIcon(context, app.packageName)
 
                             if (iconBitmap != null) {
                                 Image(
-                                    bitmap = iconBitmap.asImageBitmap(),
+                                    bitmap = iconBitmap,
                                     contentDescription = app.appName,
                                     modifier = Modifier
                                         .size(36.dp)
@@ -1191,25 +1190,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-        }
-    }
-
-    // Helper to extract application icon drawables to pure high quality bitmaps
-    private fun getAppIconBitmap(context: Context, packageName: String): Bitmap? {
-        return try {
-            val pm = context.packageManager
-            val iconDrawable = pm.getApplicationIcon(packageName)
-            val bitmap = Bitmap.createBitmap(
-                iconDrawable.intrinsicWidth.coerceAtLeast(1),
-                iconDrawable.intrinsicHeight.coerceAtLeast(1),
-                Bitmap.Config.ARGB_8888
-            )
-            val canvas = Canvas(bitmap)
-            iconDrawable.setBounds(0, 0, canvas.width, canvas.height)
-            iconDrawable.draw(canvas)
-            bitmap
-        } catch (e: Exception) {
-            null
         }
     }
 

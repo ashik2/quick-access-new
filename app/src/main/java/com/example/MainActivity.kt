@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.*
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppInfo
@@ -140,7 +141,6 @@ fun DashboardScreen(
     val orientation by viewModel.orientation.collectAsStateWithLifecycle()
     val opacity by viewModel.opacity.collectAsStateWithLifecycle()
     val themePreset by viewModel.themePreset.collectAsStateWithLifecycle()
-    val autoColorButtons by viewModel.autoColorButtons.collectAsStateWithLifecycle()
     val isServiceEnabled by viewModel.isServiceEnabled.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val overlapNavBar by viewModel.overlapNavBar.collectAsStateWithLifecycle()
@@ -646,7 +646,7 @@ fun PinnedAppCard(
 ) {
     val context = LocalContext.current
     val isSys = app.packageName.startsWith("sys:")
-    val bitmap = remember(app.packageName) { if (isSys) null else getAppIconBitmap(context, app.packageName) }
+    val bitmap = rememberAppIcon(context, app.packageName)
     val sysIcon = remember(app.packageName) { if (isSys) getSystemButtonIcon(app.packageName) else null }
 
     Card(
@@ -719,7 +719,7 @@ fun PinnedAppCard(
                     }
                 } else if (bitmap != null) {
                     Image(
-                        bitmap = bitmap.asImageBitmap(),
+                        bitmap = bitmap,
                         contentDescription = app.appName,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -997,7 +997,7 @@ fun AppGridItem(
 ) {
     val context = LocalContext.current
     val isSys = app.packageName.startsWith("sys:")
-    val bitmap = remember(app.packageName) { if (isSys) null else getAppIconBitmap(context, app.packageName) }
+    val bitmap = rememberAppIcon(context, app.packageName)
     val sysIcon = remember(app.packageName) { if (isSys) getSystemButtonIcon(app.packageName) else null }
 
     Card(
@@ -1081,7 +1081,7 @@ fun AppGridItem(
                         }
                     } else if (bitmap != null) {
                         Image(
-                            bitmap = bitmap.asImageBitmap(),
+                            bitmap = bitmap,
                             contentDescription = app.appName,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -1119,29 +1119,5 @@ fun AppGridItem(
             }
         }
     }
-}
-
-// Extraction utility for local drawables
-private fun getAppIconBitmap(context: Context, packageName: String): Bitmap? {
-    return try {
-        val pm = context.packageManager
-        val iconDrawable = pm.getApplicationIcon(packageName)
-        val bitmap = Bitmap.createBitmap(
-            iconDrawable.intrinsicWidth.coerceAtLeast(1),
-            iconDrawable.intrinsicHeight.coerceAtLeast(1),
-            Bitmap.Config.ARGB_8888
-        )
-        val canvas = Canvas(bitmap)
-        iconDrawable.setBounds(0, 0, canvas.width, canvas.height)
-        iconDrawable.draw(canvas)
-        bitmap
-    } catch (e: Exception) {
-        null
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(text = "Hello $name!", modifier = modifier)
 }
 
