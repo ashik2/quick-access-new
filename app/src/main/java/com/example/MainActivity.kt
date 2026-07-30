@@ -872,6 +872,32 @@ fun CustomizationSection(
                 )
             }
 
+            // Navigation Bar Overlap toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Float Over Navigation Bar",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Disabled to keep taskbar strictly above system navigation controls.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = overlapNavBar,
+                    onCheckedChange = onOverlapNavBarChange,
+                    modifier = Modifier.testTag("overlap_nav_bar_switch")
+                )
+            }
+
             // Theme Preset selections
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(

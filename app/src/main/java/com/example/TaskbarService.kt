@@ -107,7 +107,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
     private var isMinimized = mutableStateOf(false)
     private var searchQuery = mutableStateOf("")
 
-    private var overlapNavBar = mutableStateOf(true)
+    private var overlapNavBar = mutableStateOf(false)
 
     // Persistent dragged Y offset
     private var offsetPercentY = mutableStateOf(0.4f) // position percentage from top (0.0f - 1.0f)
@@ -129,7 +129,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         opacity.value = prefs.getFloat("pref_taskbar_opacity", 0.85f)
         themePreset.value = prefs.getString("pref_taskbar_theme", "glass") ?: "glass"
         offsetPercentY.value = prefs.getFloat("pref_taskbar_offset_y", 0.4f)
-        overlapNavBar.value = prefs.getBoolean("pref_overlap_nav_bar", true)
+        overlapNavBar.value = prefs.getBoolean("pref_overlap_nav_bar", false)
     }
 
     private fun saveOffsetY(percent: Float) {
@@ -247,16 +247,20 @@ class TaskbarService : Service(), ViewModelStoreOwner {
             } else {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                     fitInsetsTypes = android.view.WindowInsets.Type.systemBars()
+                    fitInsetsSides = android.view.WindowInsets.Side.all()
                 }
             }
             x = 0
             val screenHeight = getScreenHeight()
+            val statusBarHeight = getStatusBarHeight(this@TaskbarService)
+            val navBarHeight = if (overlapNavBar.value) 0 else getNavigationBarHeight(this@TaskbarService)
+            val usableHeight = (screenHeight - statusBarHeight - navBarHeight).coerceAtLeast(100)
+
             if (edge == "bottom") {
-                val navBarHeight = if (overlapNavBar.value) getNavigationBarHeight(this@TaskbarService) else 0
-                y = ((screenHeight - navBarHeight) * offsetPercentY.value).toInt() + navBarHeight
+                val bottomBase = if (overlapNavBar.value) 0 else navBarHeight
+                y = (usableHeight * offsetPercentY.value).toInt() + bottomBase
             } else {
-                val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-                y = ((screenHeight - statusBarHeight) * offsetPercentY.value).toInt() + statusBarHeight
+                y = (usableHeight * offsetPercentY.value).toInt() + statusBarHeight
             }
         }
 
@@ -334,12 +338,15 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                 }
                 params.x = 0
                 val screenHeight = getScreenHeight()
+                val statusBarHeight = getStatusBarHeight(this@TaskbarService)
+                val navBarHeight = if (overlapNavBar.value) 0 else getNavigationBarHeight(this@TaskbarService)
+                val usableHeight = (screenHeight - statusBarHeight - navBarHeight).coerceAtLeast(100)
+
                 if (edge == "bottom") {
-                    val navBarHeight = if (overlapNavBar.value) getNavigationBarHeight(this@TaskbarService) else 0
-                    params.y = ((screenHeight - navBarHeight) * offsetPercentY.value).toInt() + navBarHeight
+                    val bottomBase = if (overlapNavBar.value) 0 else navBarHeight
+                    params.y = (usableHeight * offsetPercentY.value).toInt() + bottomBase
                 } else {
-                    val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-                    params.y = ((screenHeight - statusBarHeight) * offsetPercentY.value).toInt() + statusBarHeight
+                    params.y = (usableHeight * offsetPercentY.value).toInt() + statusBarHeight
                 }
                 params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 if (overlapNavBar.value) {
@@ -350,6 +357,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                 } else {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                         params.fitInsetsTypes = android.view.WindowInsets.Type.systemBars()
+                        params.fitInsetsSides = android.view.WindowInsets.Side.all()
                     }
                 }
             }
@@ -716,6 +724,45 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         }
     }
 
+    private fun handleDragDelta(dragAmountY: Float) {
+        val screenH = getScreenHeight()
+        val statusBarHeight = getStatusBarHeight(this@TaskbarService)
+        val navBarHeight = if (overlapNavBar.value) 0 else getNavigationBarHeight(this@TaskbarService)
+        val usableH = (screenH - statusBarHeight - navBarHeight).coerceAtLeast(100)
+
+        val isBottom = positionEdge.value == "bottom"
+        if (isBottom) {
+            params.y = (params.y - dragAmountY).toInt()
+            val minAllowedY = if (overlapNavBar.value) 0 else navBarHeight
+            val maxAllowedY = screenH - statusBarHeight - 150
+            val boundedY = params.y.coerceIn(minAllowedY, maxAllowedY)
+            params.y = boundedY
+            offsetPercentY.value = if (usableH > 0) {
+                ((boundedY - minAllowedY).toFloat() / usableH).coerceIn(0.0f, 1.0f)
+            } else {
+                0.0f
+            }
+        } else {
+            params.y = (params.y + dragAmountY).toInt()
+            val minAllowedY = statusBarHeight
+            val maxAllowedY = screenH - navBarHeight - 120
+            val boundedY = params.y.coerceIn(minAllowedY, maxAllowedY)
+            params.y = boundedY
+            offsetPercentY.value = if (usableH > 0) {
+                ((boundedY - statusBarHeight).toFloat() / usableH).coerceIn(0.0f, 1.0f)
+            } else {
+                0.0f
+            }
+        }
+        saveOffsetY(offsetPercentY.value)
+
+        try {
+            windowManager.updateViewLayout(composeView, params)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     @Composable
     fun HorizontalDragHandle(accentColor: Color) {
         Box(
@@ -729,37 +776,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                         onDragCancel = { },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            val screenH = getScreenHeight()
-                            // Calculate new coordinates
-                            val isBottom = positionEdge.value == "bottom"
-                            if (isBottom) {
-                                params.y = (params.y - dragAmount.y).toInt()
-                                val navBarHeight = if (overlapNavBar.value) getNavigationBarHeight(this@TaskbarService) else 0
-                                val boundedY = params.y.coerceIn(navBarHeight, screenH - 150)
-                                params.y = boundedY
-                                offsetPercentY.value = if (screenH - navBarHeight > 0) {
-                                    (boundedY - navBarHeight).toFloat() / (screenH - navBarHeight)
-                                } else {
-                                    0.0f
-                                }
-                            } else {
-                                params.y = (params.y + dragAmount.y).toInt()
-                                val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-                                val boundedY = params.y.coerceIn(statusBarHeight, screenH - 120)
-                                params.y = boundedY
-                                offsetPercentY.value = if (screenH - statusBarHeight > 0) {
-                                    (boundedY - statusBarHeight).toFloat() / (screenH - statusBarHeight)
-                                } else {
-                                    0.0f
-                                }
-                            }
-                            saveOffsetY(offsetPercentY.value)
-
-                            try {
-                                windowManager.updateViewLayout(composeView, params)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            handleDragDelta(dragAmount.y)
                         }
                     )
                 }
@@ -789,37 +806,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                         onDragCancel = { },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            val screenH = getScreenHeight()
-                            // Calculate new coordinates
-                            val isBottom = positionEdge.value == "bottom"
-                            if (isBottom) {
-                                params.y = (params.y - dragAmount.y).toInt()
-                                val navBarHeight = if (overlapNavBar.value) getNavigationBarHeight(this@TaskbarService) else 0
-                                val boundedY = params.y.coerceIn(navBarHeight, screenH - 150)
-                                params.y = boundedY
-                                offsetPercentY.value = if (screenH - navBarHeight > 0) {
-                                    (boundedY - navBarHeight).toFloat() / (screenH - navBarHeight)
-                                } else {
-                                    0.0f
-                                }
-                            } else {
-                                params.y = (params.y + dragAmount.y).toInt()
-                                val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-                                val boundedY = params.y.coerceIn(statusBarHeight, screenH - 120)
-                                params.y = boundedY
-                                offsetPercentY.value = if (screenH - statusBarHeight > 0) {
-                                    (boundedY - statusBarHeight).toFloat() / (screenH - statusBarHeight)
-                                } else {
-                                    0.0f
-                                }
-                            }
-                            saveOffsetY(offsetPercentY.value)
-
-                            try {
-                                windowManager.updateViewLayout(composeView, params)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            handleDragDelta(dragAmount.y)
                         }
                     )
                 }
@@ -976,36 +963,7 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                         onDragCancel = { },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            val screenH = getScreenHeight()
-                            // Calculate new coordinates
-                            if (edge == "bottom") {
-                                params.y = (params.y - dragAmount.y).toInt()
-                                val navBarHeight = if (overlapNavBar.value) getNavigationBarHeight(this@TaskbarService) else 0
-                                val boundedY = params.y.coerceIn(navBarHeight, screenH - 150)
-                                params.y = boundedY
-                                offsetPercentY.value = if (screenH - navBarHeight > 0) {
-                                    (boundedY - navBarHeight).toFloat() / (screenH - navBarHeight)
-                                } else {
-                                    0.0f
-                                }
-                            } else {
-                                params.y = (params.y + dragAmount.y).toInt()
-                                val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-                                val boundedY = params.y.coerceIn(statusBarHeight, screenH - 120)
-                                params.y = boundedY
-                                offsetPercentY.value = if (screenH - statusBarHeight > 0) {
-                                    (boundedY - statusBarHeight).toFloat() / (screenH - statusBarHeight)
-                                } else {
-                                    0.0f
-                                }
-                            }
-                            saveOffsetY(offsetPercentY.value)
-
-                            try {
-                                windowManager.updateViewLayout(composeView, params)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            handleDragDelta(dragAmount.y)
                         }
                     )
                 },
