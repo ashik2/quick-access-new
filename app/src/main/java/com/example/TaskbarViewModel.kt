@@ -37,11 +37,7 @@ class TaskbarViewModel(application: Application) : AndroidViewModel(application)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     // Config preferences
-    private val _positionEdge = MutableStateFlow(
-        (prefs.getString("pref_taskbar_position", "right") ?: "right").let {
-            if (it == "bottom") "right" else it
-        }
-    )
+    private val _positionEdge = MutableStateFlow(prefs.getString("pref_taskbar_position", "right") ?: "right")
     val positionEdge: StateFlow<String> = _positionEdge.asStateFlow()
 
     private val _orientation = MutableStateFlow(prefs.getString("pref_taskbar_orientation", "vertical") ?: "vertical")
@@ -55,9 +51,6 @@ class TaskbarViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isServiceEnabled = MutableStateFlow(prefs.getBoolean("pref_taskbar_enabled", false))
     val isServiceEnabled: StateFlow<Boolean> = _isServiceEnabled.asStateFlow()
-
-    private val _overlapNavBar = MutableStateFlow(prefs.getBoolean("pref_overlap_nav_bar", false))
-    val overlapNavBar: StateFlow<Boolean> = _overlapNavBar.asStateFlow()
 
     // Filtered installed apps list
     val filteredApps: StateFlow<List<AppInfo>> = combine(_installedApps, _searchQuery) { apps, query ->
@@ -192,12 +185,6 @@ class TaskbarViewModel(application: Application) : AndroidViewModel(application)
     fun updateThemePreset(preset: String) {
         _themePreset.value = preset
         prefs.edit().putString("pref_taskbar_theme", preset).apply()
-        notifyServiceOfChange()
-    }
-
-    fun updateOverlapNavBar(enabled: Boolean) {
-        _overlapNavBar.value = enabled
-        prefs.edit().putBoolean("pref_overlap_nav_bar", enabled).apply()
         notifyServiceOfChange()
     }
 

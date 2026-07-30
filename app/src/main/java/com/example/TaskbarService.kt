@@ -107,8 +107,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
     private var isMinimized = mutableStateOf(false)
     private var searchQuery = mutableStateOf("")
 
-    private var overlapNavBar = mutableStateOf(false)
-
     // Persistent dragged Y offset
     private var offsetPercentY = mutableStateOf(0.4f) // position percentage from top (0.0f - 1.0f)
 
@@ -129,7 +127,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         opacity.value = prefs.getFloat("pref_taskbar_opacity", 0.85f)
         themePreset.value = prefs.getString("pref_taskbar_theme", "glass") ?: "glass"
         offsetPercentY.value = prefs.getFloat("pref_taskbar_offset_y", 0.4f)
-        overlapNavBar.value = prefs.getBoolean("pref_overlap_nav_bar", false)
     }
 
     private fun saveOffsetY(percent: Float) {
@@ -234,34 +231,18 @@ class TaskbarService : Service(), ViewModelStoreOwner {
             PixelFormat.TRANSLUCENT
         ).apply {
             val edge = positionEdge.value
-            if (edge == "bottom") {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            } else {
-                gravity = Gravity.TOP or if (edge == "left") Gravity.START else Gravity.END
-            }
-            if (overlapNavBar.value) {
-                // Do NOT set FLAG_LAYOUT_NO_LIMITS here as it completely breaks touch inputs in overlay windows
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                    fitInsetsTypes = 0
-                }
-            } else {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                    fitInsetsTypes = android.view.WindowInsets.Type.systemBars()
-                    fitInsetsSides = android.view.WindowInsets.Side.all()
-                }
+            gravity = Gravity.TOP or if (edge == "left") Gravity.START else Gravity.END
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                fitInsetsTypes = android.view.WindowInsets.Type.systemBars()
+                fitInsetsSides = android.view.WindowInsets.Side.all()
             }
             x = 0
             val screenHeight = getScreenHeight()
             val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-            val navBarHeight = if (overlapNavBar.value) 0 else getNavigationBarHeight(this@TaskbarService)
+            val navBarHeight = getNavigationBarHeight(this@TaskbarService)
             val usableHeight = (screenHeight - statusBarHeight - navBarHeight).coerceAtLeast(100)
 
-            if (edge == "bottom") {
-                val bottomBase = if (overlapNavBar.value) 0 else navBarHeight
-                y = (usableHeight * offsetPercentY.value).toInt() + bottomBase
-            } else {
-                y = (usableHeight * offsetPercentY.value).toInt() + statusBarHeight
-            }
+            y = (usableHeight * offsetPercentY.value).toInt() + statusBarHeight
         }
 
         // Setup Content
@@ -331,34 +312,18 @@ class TaskbarService : Service(), ViewModelStoreOwner {
                     params.width = WindowManager.LayoutParams.WRAP_CONTENT
                 }
                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
-                if (edge == "bottom") {
-                    params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                } else {
-                    params.gravity = Gravity.TOP or if (edge == "left") Gravity.START else Gravity.END
-                }
+                params.gravity = Gravity.TOP or if (edge == "left") Gravity.START else Gravity.END
                 params.x = 0
                 val screenHeight = getScreenHeight()
                 val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-                val navBarHeight = if (overlapNavBar.value) 0 else getNavigationBarHeight(this@TaskbarService)
+                val navBarHeight = getNavigationBarHeight(this@TaskbarService)
                 val usableHeight = (screenHeight - statusBarHeight - navBarHeight).coerceAtLeast(100)
 
-                if (edge == "bottom") {
-                    val bottomBase = if (overlapNavBar.value) 0 else navBarHeight
-                    params.y = (usableHeight * offsetPercentY.value).toInt() + bottomBase
-                } else {
-                    params.y = (usableHeight * offsetPercentY.value).toInt() + statusBarHeight
-                }
+                params.y = (usableHeight * offsetPercentY.value).toInt() + statusBarHeight
                 params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                if (overlapNavBar.value) {
-                    // Do NOT set FLAG_LAYOUT_NO_LIMITS here as it completely breaks touch inputs in overlay windows
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                        params.fitInsetsTypes = 0
-                    }
-                } else {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                        params.fitInsetsTypes = android.view.WindowInsets.Type.systemBars()
-                        params.fitInsetsSides = android.view.WindowInsets.Side.all()
-                    }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    params.fitInsetsTypes = android.view.WindowInsets.Type.systemBars()
+                    params.fitInsetsSides = android.view.WindowInsets.Side.all()
                 }
             }
             windowManager.updateViewLayout(composeView, params)
@@ -488,7 +453,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
         // Handle alignment layout direction
         val contentAlignment = when (edge) {
             "left" -> Alignment.CenterStart
-            "bottom" -> Alignment.BottomCenter
             else -> Alignment.CenterEnd
         }
 
@@ -674,11 +638,8 @@ class TaskbarService : Service(), ViewModelStoreOwner {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            activeItems.forEachIndexed { index, pinnedApp ->
+            activeItems.forEach { pinnedApp ->
                 RenderPinnedItem(pinnedApp, accentColor, contentColor, isHorizontal = false)
-                if (index < activeItems.lastIndex) {
-                    DockDivider(accentColor, isHorizontal = false)
-                }
             }
         }
     }
@@ -715,11 +676,8 @@ class TaskbarService : Service(), ViewModelStoreOwner {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
         ) {
-            activeItems.forEachIndexed { index, pinnedApp ->
+            activeItems.forEach { pinnedApp ->
                 RenderPinnedItem(pinnedApp, accentColor, contentColor, isHorizontal = true)
-                if (index < activeItems.lastIndex) {
-                    DockDivider(accentColor, isHorizontal = true)
-                }
             }
         }
     }
@@ -727,32 +685,18 @@ class TaskbarService : Service(), ViewModelStoreOwner {
     private fun handleDragDelta(dragAmountY: Float) {
         val screenH = getScreenHeight()
         val statusBarHeight = getStatusBarHeight(this@TaskbarService)
-        val navBarHeight = if (overlapNavBar.value) 0 else getNavigationBarHeight(this@TaskbarService)
+        val navBarHeight = getNavigationBarHeight(this@TaskbarService)
         val usableH = (screenH - statusBarHeight - navBarHeight).coerceAtLeast(100)
 
-        val isBottom = positionEdge.value == "bottom"
-        if (isBottom) {
-            params.y = (params.y - dragAmountY).toInt()
-            val minAllowedY = if (overlapNavBar.value) 0 else navBarHeight
-            val maxAllowedY = screenH - statusBarHeight - 150
-            val boundedY = params.y.coerceIn(minAllowedY, maxAllowedY)
-            params.y = boundedY
-            offsetPercentY.value = if (usableH > 0) {
-                ((boundedY - minAllowedY).toFloat() / usableH).coerceIn(0.0f, 1.0f)
-            } else {
-                0.0f
-            }
+        params.y = (params.y + dragAmountY).toInt()
+        val minAllowedY = statusBarHeight
+        val maxAllowedY = screenH - navBarHeight - 120
+        val boundedY = params.y.coerceIn(minAllowedY, maxAllowedY)
+        params.y = boundedY
+        offsetPercentY.value = if (usableH > 0) {
+            ((boundedY - statusBarHeight).toFloat() / usableH).coerceIn(0.0f, 1.0f)
         } else {
-            params.y = (params.y + dragAmountY).toInt()
-            val minAllowedY = statusBarHeight
-            val maxAllowedY = screenH - navBarHeight - 120
-            val boundedY = params.y.coerceIn(minAllowedY, maxAllowedY)
-            params.y = boundedY
-            offsetPercentY.value = if (usableH > 0) {
-                ((boundedY - statusBarHeight).toFloat() / usableH).coerceIn(0.0f, 1.0f)
-            } else {
-                0.0f
-            }
+            0.0f
         }
         saveOffsetY(offsetPercentY.value)
 
@@ -885,16 +829,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
     }
 
     @Composable
-    fun DockDivider(accentColor: Color, isHorizontal: Boolean = false) {
-        Box(
-            modifier = Modifier
-                .requiredWidth(if (isHorizontal) 1.dp else 32.dp)
-                .requiredHeight(if (isHorizontal) 32.dp else 1.dp)
-                .background(accentColor.copy(alpha = 0.25f))
-        )
-    }
-
-    @Composable
     fun AppIconPill(
         packName: String,
         contentColor: Color,
@@ -972,7 +906,6 @@ class TaskbarService : Service(), ViewModelStoreOwner {
             Icon(
                 imageVector = when (edge) {
                     "left" -> Icons.Default.ChevronRight
-                    "bottom" -> Icons.Default.ArrowUpward
                     else -> Icons.Default.ChevronLeft
                 },
                 contentDescription = "Unhide Taskbar",

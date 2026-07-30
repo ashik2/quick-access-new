@@ -2,8 +2,6 @@ package com.example
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -33,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -43,11 +40,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.data.*
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.AppInfo
-import com.example.data.PinnedApp
+import com.example.data.*
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -143,7 +138,6 @@ fun DashboardScreen(
     val themePreset by viewModel.themePreset.collectAsStateWithLifecycle()
     val isServiceEnabled by viewModel.isServiceEnabled.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val overlapNavBar by viewModel.overlapNavBar.collectAsStateWithLifecycle()
 
     val focusManager = LocalFocusManager.current
 
@@ -240,12 +234,10 @@ fun DashboardScreen(
                 opacity = opacity,
                 themePreset = themePreset,
                 pinnedApps = pinnedApps,
-                overlapNavBar = overlapNavBar,
                 onPositionChange = { viewModel.updatePositionEdge(it) },
                 onOrientationChange = { viewModel.updateOrientation(it) },
                 onOpacityChange = { viewModel.updateOpacity(it) },
-                onThemePresetChange = { viewModel.updateThemePreset(it) },
-                onOverlapNavBarChange = { viewModel.updateOverlapNavBar(it) }
+                onThemePresetChange = { viewModel.updateThemePreset(it) }
             )
         }
 
@@ -759,12 +751,10 @@ fun CustomizationSection(
     opacity: Float,
     themePreset: String,
     pinnedApps: List<PinnedApp>,
-    overlapNavBar: Boolean,
     onPositionChange: (String) -> Unit,
     onOrientationChange: (String) -> Unit,
     onOpacityChange: (Float) -> Unit,
-    onThemePresetChange: (String) -> Unit,
-    onOverlapNavBarChange: (Boolean) -> Unit
+    onThemePresetChange: (String) -> Unit
 ) {
 
     Card(
@@ -869,32 +859,6 @@ fun CustomizationSection(
                     onValueChange = onOpacityChange,
                     valueRange = 0.0f..1.0f,
                     modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Navigation Bar Overlap toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Float Over Navigation Bar",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Disabled to keep taskbar strictly above system navigation controls.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = overlapNavBar,
-                    onCheckedChange = onOverlapNavBarChange,
-                    modifier = Modifier.testTag("overlap_nav_bar_switch")
                 )
             }
 
