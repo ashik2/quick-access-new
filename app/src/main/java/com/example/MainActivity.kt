@@ -102,6 +102,7 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     var hasOverlayPermission by remember { mutableStateOf(PermissionUtils.canDrawOverlaysCompat(context)) }
+    var isAccessibilityActive by remember { mutableStateOf(TaskbarAccessibilityService.isServiceRunning()) }
 
     // Collect variables
     val pinnedApps by viewModel.pinnedApps.collectAsStateWithLifecycle()
@@ -152,6 +153,7 @@ fun DashboardScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 hasOverlayPermission = PermissionUtils.canDrawOverlaysCompat(context)
+                isAccessibilityActive = TaskbarAccessibilityService.isServiceRunning()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -190,19 +192,29 @@ fun DashboardScreen(
             )
         }
 
-        // Overlay Permission Banner Card if lacking
-        if (!hasOverlayPermission) {
-            item {
-                PermissionRequestCard(
-                    onRequestPermission = {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}")
-                        )
+        // Unified Permissions & Services Banner Card
+        item {
+            CombinedPermissionsCard(
+                hasOverlayPermission = hasOverlayPermission,
+                isAccessibilityActive = isAccessibilityActive,
+                onRequestOverlayPermission = {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                    context.startActivity(intent)
+                },
+                onRequestAccessibilityPermission = {
+                    try {
+                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
                         context.startActivity(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
-                )
-            }
+                }
+            )
         }
 
         // Pinned Apps Tray Builder (Horizontal Carousel)
@@ -401,49 +413,153 @@ fun HeaderSection(
 }
 
 @Composable
-fun PermissionRequestCard(
-    onRequestPermission: () -> Unit
+fun CombinedPermissionsCard(
+    hasOverlayPermission: Boolean,
+    isAccessibilityActive: Boolean,
+    onRequestOverlayPermission: () -> Unit,
+    onRequestAccessibilityPermission: () -> Unit
 ) {
+    val allGranted = hasOverlayPermission && isAccessibilityActive
+    val isWarning = !hasOverlayPermission || !isAccessibilityActive
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isWarning) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+            }
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Header Row
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = "Permission Alert",
-                    tint = MaterialTheme.colorScheme.error
+                    imageVector = if (allGranted) Icons.Default.VerifiedUser else Icons.Default.Shield,
+                    contentDescription = "System Permissions",
+                    tint = if (allGranted) Color(0xFF10B981) else MaterialTheme.colorScheme.error
                 )
+                Column {
+                    Text(
+                        text = "App Permissions & Services",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (allGranted) "All required permissions are active" else "Grant permissions below for taskbar features",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
+
+            // 1. Overlay Permission Item
+            PermissionStatusRow(
+                title = "Display Over Other Apps",
+                description = "Required to keep floating taskbar visible across all apps.",
+                isGranted = hasOverlayPermission,
+                buttonText = "Grant Overlay Permission",
+                testTag = "grant_overlay_button",
+                onRequestPermission = onRequestOverlayPermission
+            )
+
+            // 2. Accessibility Service Item
+            PermissionStatusRow(
+                title = "Quick Access Helper (Accessibility)",
+                description = "Required for Back, Home, and gesture navigation controls.",
+                isGranted = isAccessibilityActive,
+                buttonText = "Enable Accessibility",
+                testTag = "grant_accessibility_button",
+                onRequestPermission = onRequestAccessibilityPermission
+            )
+        }
+    }
+}
+
+@Composable
+private fun PermissionStatusRow(
+    title: String,
+    description: String,
+    isGranted: Boolean,
+    buttonText: String,
+    testTag: String,
+    onRequestPermission: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp)),
+        color = if (isGranted) Color(0xFFE2F6EA) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (isGranted) Color(0xFF10B981) else Color(0xFFEF4444))
+                    )
+                    Text(
+                        text = title,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isGranted) Color(0xFF065F46) else MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+
                 Text(
-                    text = "Drawing Overlay Permission Required",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    text = if (isGranted) "Active" else "Action Needed",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isGranted) Color(0xFF047857) else MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isGranted) Color(0xFFA7F3D0) else MaterialTheme.colorScheme.errorContainer)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
 
             Text(
-                text = "Taskbar works as a floating component. To keep it visible no matter which app is open, you need to grant the 'Display over other apps' setting.",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                text = description,
+                fontSize = 11.sp,
+                color = if (isGranted) Color(0xFF065F46).copy(alpha = 0.8f) else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
             )
 
-            Button(
-                onClick = onRequestPermission,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("grant_permission_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text("Grant Overlay Permission", color = Color.White)
+            if (!isGranted) {
+                Button(
+                    onClick = onRequestPermission,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .testTag(testTag),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(buttonText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
             }
         }
     }
@@ -853,66 +969,6 @@ fun CustomizationSection(
                                         color = if (isSelected) selectColor else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Accessibility helper status check if sys:back is pinned
-            val isAccessibilityActive = TaskbarAccessibilityService.isServiceRunning()
-            val hasBack = pinnedApps.any { it.packageName == "sys:back" }
-            if (hasBack) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp)),
-                    color = if (isAccessibilityActive) Color(0xFFE2F6EA) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isAccessibilityActive) Color(0xFF34D399) else Color(0xFFF87171))
-                            )
-                            Text(
-                                text = if (isAccessibilityActive) "Quick access Helper: Active" else "Quick access Helper: Not Active",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isAccessibilityActive) Color(0xFF065F46) else MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                        Text(
-                            text = "To trigger the Back action, Android requires the 'Quick access Helper' accessibility service to be enabled in system settings.",
-                            fontSize = 11.sp,
-                            color = if (isAccessibilityActive) Color(0xFF065F46).copy(alpha = 0.8f) else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
-                        )
-                        if (!isAccessibilityActive) {
-                            val context = LocalContext.current
-                            Button(
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Text("Enable Quick access Helper", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
